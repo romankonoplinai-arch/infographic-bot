@@ -13,7 +13,7 @@ class Config:
     # xAI Grok 4
     grok_api_key: str = os.getenv("GROK_API_KEY", "")
     grok_api_url: str = "https://api.x.ai/v1/chat/completions"
-    grok_model: str = "grok-3"  # Latest Grok model (grok-3 is current flagship)
+    grok_model: str = "grok-4"  # Grok 4 for SEO and keywords
 
     # OpenRouter (Nano Banana Pro)
     openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
