@@ -18,7 +18,7 @@ class Config:
     # OpenRouter (Nano Banana Pro)
     openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
     openrouter_api_url: str = "https://openrouter.ai/api/v1/chat/completions"
-    nanobanana_model: str = "google/gemini-2.0-flash-exp:free"  # Nano Banana Pro
+    nanobanana_model: str = "google/gemini-2.0-flash-exp"  # Nano Banana Pro (paid, no rate limits)
 
     # Image settings
     max_image_size_mb: int = 10
