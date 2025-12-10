@@ -477,6 +477,43 @@ class NanoBananaService:
 
         return None
 
+    async def generate_from_prompt(self, prompt: str) -> Optional[bytes]:
+        """
+        Generate image from free text prompt.
+        Returns image bytes or None.
+        """
+        logger.info(f"Generating image from prompt: {prompt[:50]}...")
+
+        full_prompt = f"""{prompt}
+
+ТРЕБОВАНИЯ:
+- Высокое качество изображения
+- Если есть текст - на русском языке
+- Профессиональный результат
+
+Сгенерируй изображение."""
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": full_prompt}
+                ]
+            }
+        ]
+
+        response = await self._make_request(messages, temperature=0.9)
+
+        if response:
+            image_bytes = self._extract_image_from_response(response)
+            if image_bytes:
+                logger.info("Image from prompt generated successfully")
+                return image_bytes
+            else:
+                logger.warning("Generate from prompt: no image in response")
+
+        return None
+
     async def generate_slide_from_reference(
         self,
         reference_image_bytes: bytes,

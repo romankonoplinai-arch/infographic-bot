@@ -8,7 +8,7 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from bot.config import config, validate_config
-from bot.handlers import start, edit_photo, keywords, seo_slides, first_slide, slides_from_ref
+from bot.handlers import start, edit_photo, keywords, seo_slides, first_slide, slides_from_ref, free_image
 
 # Configure logging
 logging.basicConfig(
@@ -41,6 +41,7 @@ async def main():
     dp.include_router(seo_slides.router)
     dp.include_router(first_slide.router)
     dp.include_router(slides_from_ref.router)
+    dp.include_router(free_image.router)
 
     # Start polling
     logger.info("Starting bot...")

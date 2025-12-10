@@ -34,7 +34,14 @@ def get_main_menu() -> InlineKeyboardMarkup:
             callback_data="slides_from_ref"
         )
     )
-    # 5. Keywords (keep)
+    # 5. Free image generation
+    builder.row(
+        InlineKeyboardButton(
+            text="🖼 Генерация по промпту",
+            callback_data="free_image"
+        )
+    )
+    # 6. Keywords (keep)
     builder.row(
         InlineKeyboardButton(
             text="🔍 Найти ключевые слова",
