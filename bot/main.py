@@ -8,7 +8,7 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from bot.config import config, validate_config
-from bot.handlers import start, remove_bg, keywords, seo, infographic
+from bot.handlers import start, remove_bg, edit_photo, keywords, seo, infographic
 
 # Configure logging
 logging.basicConfig(
@@ -37,6 +37,7 @@ async def main():
     # Register routers
     dp.include_router(start.router)
     dp.include_router(remove_bg.router)
+    dp.include_router(edit_photo.router)
     dp.include_router(keywords.router)
     dp.include_router(seo.router)
     dp.include_router(infographic.router)

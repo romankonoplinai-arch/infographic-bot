@@ -337,51 +337,67 @@ async def start_generation(callback: CallbackQuery, state: FSMContext, bot: Bot)
     processing_msg = await callback.message.edit_text(
         "🎨 <b>Генерация инфографики...</b>\n\n"
         f"Создаю {session.num_slides} слайдов...\n\n"
-        "⏳ Это может занять несколько минут."
+        "⏳ Это может занять несколько минут.\n"
+        "Каждый слайд генерируется отдельно."
     )
 
     try:
-        # Generate all slides
+        # Generate all slides with actual images
         slides = await nanobanana_service.generate_all_slides(
             product_image_bytes=session.original_image,
             slide_prompts=session.slide_prompts,
-            style_guide=session.style_guide
+            style_guide=session.style_guide,
+            product_name=session.product_name
         )
 
         if slides:
             session.slides_designs = slides
 
-            # Format results
-            results_text = [
-                "<b>✅ Инфографика создана!</b>\n",
-                f"<b>Товар:</b> {session.product_name}",
-                f"<b>Слайдов:</b> {len(slides)}\n",
-                "<b>Дизайн-спецификации для каждого слайда:</b>\n"
-            ]
-
-            for slide in slides:
-                slide_num = slide.get("slide_num", "?")
-                is_main = "👑 " if slide.get("is_main") else ""
-                text = slide.get("text_overlay", "")[:50]
-                results_text.append(f"{is_main}<b>Слайд {slide_num}:</b> {text}")
-
-            results_text.append("\n<i>Дизайн-спецификации сохранены.</i>")
-            results_text.append("<i>Используйте их для создания изображений в Midjourney/DALL-E.</i>")
+            # Count successful slides
+            success_count = sum(1 for s in slides if s.get("image_bytes"))
+            error_count = len(slides) - success_count
 
             await processing_msg.edit_text(
-                "\n".join(results_text),
-                reply_markup=get_back_to_menu_keyboard()
+                f"<b>✅ Инфографика создана!</b>\n\n"
+                f"<b>Товар:</b> {session.product_name}\n"
+                f"<b>Успешно:</b> {success_count} из {len(slides)} слайдов\n\n"
+                "Отправляю изображения..."
             )
 
-            # Send detailed specs as separate messages
+            # Send each generated slide as image
             for slide in slides:
-                spec_text = (
-                    f"<b>Слайд {slide.get('slide_num', '?')}</b>\n"
-                    f"{'👑 Главный слайд' if slide.get('is_main') else ''}\n\n"
-                    f"<b>Текст:</b> {slide.get('text_overlay', '')}\n\n"
-                    f"<b>Дизайн:</b>\n{slide.get('design_spec', '')[:1500]}..."
-                )
-                await callback.message.answer(spec_text)
+                slide_num = slide.get("slide_num", "?")
+                is_main = "👑 Главный слайд" if slide.get("is_main") else ""
+                text = slide.get("text_overlay", "")
+
+                if slide.get("image_bytes"):
+                    # Send actual image
+                    processed_image = resize_for_telegram(slide["image_bytes"])
+                    processed_image = compress_image(processed_image, max_size_mb=5)
+
+                    await callback.message.answer_photo(
+                        photo=BufferedInputFile(
+                            processed_image,
+                            filename=f"slide_{slide_num}.jpg"
+                        ),
+                        caption=(
+                            f"<b>Слайд {slide_num}</b> {is_main}\n\n"
+                            f"<b>Текст:</b> {text}"
+                        )
+                    )
+                else:
+                    # Slide failed to generate
+                    await callback.message.answer(
+                        f"❌ <b>Слайд {slide_num}</b> - не удалось сгенерировать\n"
+                        f"<b>Текст:</b> {text}"
+                    )
+
+            await callback.message.answer(
+                f"✅ <b>Готово!</b>\n\n"
+                f"Создано {success_count} слайдов инфографики для товара:\n"
+                f"<b>{session.product_name}</b>",
+                reply_markup=get_back_to_menu_keyboard()
+            )
 
         else:
             await processing_msg.edit_text(
@@ -392,7 +408,7 @@ async def start_generation(callback: CallbackQuery, state: FSMContext, bot: Bot)
     except Exception as e:
         logger.error(f"Error generating slides: {e}")
         await processing_msg.edit_text(
-            "❌ Ошибка при генерации.",
+            "❌ Ошибка при генерации.\nПопробуйте позже.",
             reply_markup=get_back_to_menu_keyboard()
         )
 

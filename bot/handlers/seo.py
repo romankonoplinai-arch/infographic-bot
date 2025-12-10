@@ -173,33 +173,46 @@ async def process_seo(message: Message, state: FSMContext, user_id: int):
             # Format SEO response
             seo = analysis.get("seo", {})
 
-            response_parts = [
-                f"<b>SEO-контент для товара:</b>\n",
-                f"<b>Заголовок:</b>\n{seo.get('title', 'Не сгенерирован')}\n",
+            # Message 1: Title and Bullets
+            msg1_parts = [
+                f"<b>✅ SEO-контент для товара:</b>\n",
+                f"<b>📌 Заголовок:</b>\n{seo.get('title', 'Не сгенерирован')}\n",
             ]
 
             if seo.get("card_bullets"):
-                response_parts.append("<b>Буллеты для карточки:</b>")
-                for bullet in seo["card_bullets"][:7]:
-                    response_parts.append(f"• {bullet}")
-                response_parts.append("")
+                msg1_parts.append("\n<b>📋 Буллеты для карточки:</b>")
+                for bullet in seo["card_bullets"]:
+                    msg1_parts.append(f"• {bullet}")
 
+            await processing_msg.edit_text("\n".join(msg1_parts))
+
+            # Message 2: Full description
             if seo.get("description"):
                 desc = seo["description"]
-                if len(desc) > 800:
-                    desc = desc[:800] + "..."
-                response_parts.append(f"<b>Описание:</b>\n{desc}\n")
-
-            # Add keywords summary
-            keywords = analysis.get("keywords", {})
-            if keywords.get("high_frequency"):
-                response_parts.append(
-                    f"<b>Топ ключевые слова:</b>\n"
-                    f"{', '.join(keywords['high_frequency'][:5])}"
+                await message.answer(
+                    f"<b>📝 Полное описание товара:</b>\n\n{desc}"
                 )
 
-            await processing_msg.edit_text(
-                "\n".join(response_parts),
+            # Message 3: Keywords
+            keywords = analysis.get("keywords", {})
+            keywords_parts = ["<b>🔑 Ключевые слова:</b>\n"]
+
+            if keywords.get("high_frequency"):
+                keywords_parts.append("<b>Высокочастотные:</b>")
+                keywords_parts.append(", ".join(keywords["high_frequency"]))
+                keywords_parts.append("")
+
+            if keywords.get("mid_frequency"):
+                keywords_parts.append("<b>Среднечастотные:</b>")
+                keywords_parts.append(", ".join(keywords["mid_frequency"]))
+                keywords_parts.append("")
+
+            if keywords.get("low_frequency"):
+                keywords_parts.append("<b>Низкочастотные:</b>")
+                keywords_parts.append(", ".join(keywords["low_frequency"]))
+
+            await message.answer(
+                "\n".join(keywords_parts),
                 reply_markup=get_back_to_menu_keyboard()
             )
         else:

@@ -14,6 +14,12 @@ def get_main_menu() -> InlineKeyboardMarkup:
     )
     builder.row(
         InlineKeyboardButton(
+            text="✏️ Редактировать фото",
+            callback_data="edit_photo"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
             text="🔍 Найти ключевые слова",
             callback_data="keywords"
         )
