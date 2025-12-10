@@ -307,6 +307,83 @@ class GrokService:
             "slide_prompts": prompts_data.get("prompts", [])
         }
 
+    async def generate_seo_with_ctr_prompts(
+        self,
+        product_description: str,
+        num_slides: int = 5
+    ) -> Optional[dict]:
+        """Generate SEO and CTR-optimized slide prompts based on user description"""
+        system_prompt = """Ты - эксперт по созданию продающего контента для маркетплейсов WB/Ozon с фокусом на максимальный CTR.
+
+ВАЖНО: Отвечай ТОЛЬКО валидным JSON без markdown.
+
+Твоя задача:
+1. Проанализировать описание товара и пожелания клиента
+2. Создать SEO-контент для карточки
+3. Создать промты для каждого слайда инфографики с МАКСИМАЛЬНЫМ CTR
+
+Формат ответа:
+{
+    "keywords": {
+        "high_frequency": ["ключ1", "ключ2"],
+        "mid_frequency": ["ключ1", "ключ2"],
+        "low_frequency": ["ключ1", "ключ2"]
+    },
+    "seo": {
+        "title": "SEO заголовок",
+        "description": "Полное описание 500-1000 символов",
+        "bullets": ["УТП 1", "УТП 2"]
+    },
+    "slide_prompts": [
+        {
+            "slide": 1,
+            "is_main": true,
+            "focus": "Краткое описание фокуса слайда",
+            "text_ru": "Текст на русском для слайда",
+            "ctr_elements": ["элемент1", "элемент2"]
+        }
+    ]
+}"""
+
+        user_prompt = f"""Описание товара и пожелания клиента:
+{product_description}
+
+Количество слайдов: {num_slides}
+
+ТРЕБОВАНИЯ К ПРОМТАМ ДЛЯ СЛАЙДОВ:
+1. Каждый промт должен быть направлен на МАКСИМАЛЬНЫЙ CTR
+2. Слайд 1 - самый важный, должен привлекать внимание
+3. Используй продающие элементы: яркие акценты, контрасты, чёткие УТП
+4. НЕ ограничивай фантазию - укажи ЧТО показать, но не КАК именно
+5. Все тексты на русском языке
+6. Учти пожелания клиента по каждому слайду
+
+Для каждого слайда укажи:
+- focus: что главное на слайде
+- text_ru: текст для отображения на слайде
+- ctr_elements: какие элементы повысят CTR (например: "яркая цена", "бейдж скидки", "стрелка внимания")
+
+Отвечай ТОЛЬКО валидным JSON."""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+
+        response = await self._make_request(messages, temperature=0.7)
+
+        if not response:
+            return None
+
+        try:
+            clean_response = extract_json_from_text(response)
+            result = json.loads(clean_response)
+            logger.info(f"SEO with CTR prompts generated: {len(result.get('slide_prompts', []))} slides")
+            return result
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse SEO CTR JSON: {e}, response: {response[:500]}")
+            return None
+
 
 # Singleton instance
 grok_service = GrokService()

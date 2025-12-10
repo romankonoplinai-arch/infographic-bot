@@ -3,37 +3,42 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 
 def get_main_menu() -> InlineKeyboardMarkup:
-    """Main menu keyboard"""
+    """Main menu keyboard - new structure"""
     builder = InlineKeyboardBuilder()
 
+    # 1. Photo editor (remove bg + edit)
     builder.row(
         InlineKeyboardButton(
-            text="🖼 Убрать фон с фото",
-            callback_data="remove_bg"
-        )
-    )
-    builder.row(
-        InlineKeyboardButton(
-            text="✏️ Редактировать фото",
+            text="✏️ Умный редактор фото",
             callback_data="edit_photo"
         )
     )
+    # 2. SEO + slide prompts
+    builder.row(
+        InlineKeyboardButton(
+            text="📝 SEO + план слайдов",
+            callback_data="seo_slides"
+        )
+    )
+    # 3. First slide generation (3 variants)
+    builder.row(
+        InlineKeyboardButton(
+            text="🎨 Создать первый слайд",
+            callback_data="first_slide"
+        )
+    )
+    # 4. Slides from reference
+    builder.row(
+        InlineKeyboardButton(
+            text="📑 Слайды по референсу",
+            callback_data="slides_from_ref"
+        )
+    )
+    # 5. Keywords (keep)
     builder.row(
         InlineKeyboardButton(
             text="🔍 Найти ключевые слова",
             callback_data="keywords"
-        )
-    )
-    builder.row(
-        InlineKeyboardButton(
-            text="📝 Создать SEO-описание",
-            callback_data="seo"
-        )
-    )
-    builder.row(
-        InlineKeyboardButton(
-            text="🎨 Создать инфографику",
-            callback_data="infographic"
         )
     )
 

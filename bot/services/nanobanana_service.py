@@ -409,6 +409,161 @@ class NanoBananaService:
 
         return None
 
+    async def generate_first_slide_variants(
+        self,
+        product_image_bytes: bytes,
+        reference_image_bytes: Optional[bytes],
+        prompt: str,
+        num_variants: int = 3
+    ) -> list[dict]:
+        """
+        Generate multiple variants of the first slide with different styles.
+        Returns list of dicts with style, image_bytes.
+        """
+        product_base64 = image_to_base64(product_image_bytes)
+
+        styles = [
+            ("Минималистичный премиум", "minimalist premium white background, clean elegant design"),
+            ("Яркий продающий", "vibrant eye-catching colors, bold CTR-optimized design, attention grabbing"),
+            ("Современный технологичный", "modern tech-inspired, gradient background, professional infographic")
+        ]
+
+        results = []
+
+        for i, (style_name, style_hint) in enumerate(styles[:num_variants], 1):
+            logger.info(f"Generating first slide variant {i}: {style_name}")
+
+            base_prompt = f"""Создай ПЕРВЫЙ СЛАЙД инфографики для маркетплейса с МАКСИМАЛЬНЫМ CTR.
+
+ОПИСАНИЕ ОТ ЗАКАЗЧИКА:
+{prompt}
+
+СТИЛЬ ЭТОГО ВАРИАНТА: {style_name}
+Характеристики: {style_hint}
+
+КРИТИЧЕСКИЕ ТРЕБОВАНИЯ:
+1. Размер 900x1200 пикселей (3:4)
+2. Товар с фото - ГЛАВНЫЙ ЭЛЕМЕНТ
+3. Все тексты ТОЛЬКО НА РУССКОМ
+4. Дизайн должен ПРИВЛЕКАТЬ ВНИМАНИЕ и ПОВЫШАТЬ CTR
+5. Профессиональное качество для маркетплейса
+6. Яркие акценты, чёткая композиция
+7. Если указана цена - сделай её заметной
+
+ВАЖНО: Не ограничивай креатив! Сделай максимально продающий и привлекательный слайд.
+
+Сгенерируй готовое изображение инфографики."""
+
+            content = [
+                {"type": "text", "text": base_prompt},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{product_base64}"}
+                }
+            ]
+
+            # Add reference if provided
+            if reference_image_bytes:
+                ref_base64 = image_to_base64(reference_image_bytes)
+                content.append({"type": "text", "text": "\n\nРЕФЕРЕНС СТИЛЯ (возьми идеи из этого дизайна):"})
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{ref_base64}"}
+                })
+
+            messages = [{"role": "user", "content": content}]
+
+            response = await self._make_request(messages, temperature=0.9)
+
+            if response:
+                image_bytes = self._extract_image_from_response(response)
+                results.append({
+                    "variant": i,
+                    "style": style_name,
+                    "image_bytes": image_bytes
+                })
+                if image_bytes:
+                    logger.info(f"Variant {i} generated successfully")
+                else:
+                    logger.warning(f"Variant {i}: no image in response")
+            else:
+                results.append({
+                    "variant": i,
+                    "style": style_name,
+                    "image_bytes": None
+                })
+
+        return results
+
+    async def generate_slide_from_reference(
+        self,
+        reference_image_bytes: bytes,
+        product_image_bytes: Optional[bytes],
+        additional_reference_bytes: Optional[bytes],
+        slide_description: str,
+        slide_number: int
+    ) -> Optional[bytes]:
+        """
+        Generate a slide based on reference style.
+        Can use multiple references for style and content.
+        """
+        content = []
+
+        # Main prompt
+        prompt = f"""Создай СЛАЙД #{slide_number} инфографики для маркетплейса.
+
+ОПИСАНИЕ СЛАЙДА:
+{slide_description}
+
+ТРЕБОВАНИЯ:
+1. ТОЧНО ПОВТОРИ СТИЛЬ из референса (первое изображение)
+2. Те же цвета, шрифты, элементы дизайна
+3. Размер 900x1200 пикселей
+4. Все тексты НА РУССКОМ языке
+5. Высокий CTR - привлекающий внимание дизайн
+
+Сгенерируй слайд в едином стиле с референсом."""
+
+        content.append({"type": "text", "text": prompt})
+
+        # Add main reference (style)
+        ref_base64 = image_to_base64(reference_image_bytes)
+        content.append({"type": "text", "text": "\n\nОСНОВНОЙ РЕФЕРЕНС (повтори этот стиль):"})
+        content.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{ref_base64}"}
+        })
+
+        # Add product image if provided
+        if product_image_bytes:
+            product_base64 = image_to_base64(product_image_bytes)
+            content.append({"type": "text", "text": "\n\nФОТО ТОВАРА (используй этот товар):"})
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{product_base64}"}
+            })
+
+        # Add additional reference if provided
+        if additional_reference_bytes:
+            add_ref_base64 = image_to_base64(additional_reference_bytes)
+            content.append({"type": "text", "text": "\n\nДОПОЛНИТЕЛЬНЫЙ РЕФЕРЕНС (пример контента/структуры):"})
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{add_ref_base64}"}
+            })
+
+        messages = [{"role": "user", "content": content}]
+
+        response = await self._make_request(messages, temperature=0.7)
+
+        if response:
+            image_bytes = self._extract_image_from_response(response)
+            if image_bytes:
+                logger.info(f"Slide {slide_number} from reference generated")
+                return image_bytes
+
+        return None
+
 
 # Singleton instance
 nanobanana_service = NanoBananaService()
