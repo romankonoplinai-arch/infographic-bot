@@ -1,11 +1,30 @@
 import json
 import logging
+import re
 import aiohttp
 from typing import Optional
 
 from bot.config import config
 
 logger = logging.getLogger(__name__)
+
+
+def extract_json_from_text(text: str) -> Optional[str]:
+    """Extract JSON from text that may contain markdown or extra content"""
+    # Remove markdown code blocks
+    text = text.strip()
+
+    # Try to find JSON in code block
+    code_block_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
+    if code_block_match:
+        text = code_block_match.group(1).strip()
+
+    # Try to find JSON object or array
+    json_match = re.search(r'(\{[\s\S]*\}|\[[\s\S]*\])', text)
+    if json_match:
+        return json_match.group(1)
+
+    return text
 
 
 class GrokService:
@@ -27,7 +46,7 @@ class GrokService:
             "model": self.model,
             "messages": messages,
             "temperature": temperature,
-            "max_tokens": 4096
+            "max_tokens": 8192
         }
 
         try:
@@ -36,7 +55,7 @@ class GrokService:
                     self.api_url,
                     headers=headers,
                     json=payload,
-                    timeout=aiohttp.ClientTimeout(total=60)
+                    timeout=aiohttp.ClientTimeout(total=120)  # Increased timeout
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
@@ -44,7 +63,9 @@ class GrokService:
                         return None
 
                     data = await response.json()
-                    return data["choices"][0]["message"]["content"]
+                    content = data["choices"][0]["message"]["content"]
+                    logger.info(f"Grok response received, length: {len(content)}")
+                    return content
 
         except aiohttp.ClientError as e:
             logger.error(f"Grok API connection error: {e}")
@@ -89,17 +110,12 @@ class GrokService:
             return None
 
         try:
-            # Clean response from potential markdown
-            clean_response = response.strip()
-            if clean_response.startswith("```"):
-                clean_response = clean_response.split("```")[1]
-                if clean_response.startswith("json"):
-                    clean_response = clean_response[4:]
-            clean_response = clean_response.strip()
-
-            return json.loads(clean_response)
+            clean_response = extract_json_from_text(response)
+            result = json.loads(clean_response)
+            logger.info(f"Keywords parsed successfully")
+            return result
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse keywords JSON: {e}, response: {response}")
+            logger.error(f"Failed to parse keywords JSON: {e}, response: {response[:500]}")
             return None
 
     async def generate_seo_content(
@@ -155,16 +171,12 @@ class GrokService:
             return None
 
         try:
-            clean_response = response.strip()
-            if clean_response.startswith("```"):
-                clean_response = clean_response.split("```")[1]
-                if clean_response.startswith("json"):
-                    clean_response = clean_response[4:]
-            clean_response = clean_response.strip()
-
-            return json.loads(clean_response)
+            clean_response = extract_json_from_text(response)
+            result = json.loads(clean_response)
+            logger.info(f"SEO content parsed successfully")
+            return result
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse SEO JSON: {e}, response: {response}")
+            logger.error(f"Failed to parse SEO JSON: {e}, response: {response[:500]}")
             return None
 
     async def generate_slide_prompts(
@@ -235,17 +247,12 @@ class GrokService:
             return None
 
         try:
-            clean_response = response.strip()
-            if clean_response.startswith("```"):
-                clean_response = clean_response.split("```")[1]
-                if clean_response.startswith("json"):
-                    clean_response = clean_response[4:]
-            clean_response = clean_response.strip()
-
+            clean_response = extract_json_from_text(response)
             data = json.loads(clean_response)
+            logger.info(f"Slide prompts parsed successfully, {len(data.get('prompts', []))} prompts")
             return data
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse prompts JSON: {e}, response: {response}")
+            logger.error(f"Failed to parse prompts JSON: {e}, response: {response[:500]}")
             return None
 
     async def generate_full_analysis(
