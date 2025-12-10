@@ -161,7 +161,7 @@ async def receive_slides_count(callback: CallbackQuery, state: FSMContext):
             ]
 
             if seo.get("description"):
-                seo_parts.append(f"\n<b>📝 Описание:</b>\n{seo['description'][:500]}...")
+                seo_parts.append(f"\n<b>📝 Описание:</b>\n{seo['description']}")
 
             await processing_msg.edit_text("\n".join(seo_parts))
 
@@ -182,8 +182,8 @@ async def receive_slides_count(callback: CallbackQuery, state: FSMContext):
                 for p in prompts:
                     slide_num = p.get("slide", "?")
                     focus = p.get("focus", "")
-                    text = p.get("text_ru", "")[:100]
-                    prompts_parts.append(f"\n<b>Слайд {slide_num}:</b> {focus}\n<i>{text}...</i>")
+                    text = p.get("text_ru", "")
+                    prompts_parts.append(f"\n<b>Слайд {slide_num}:</b> {focus}\n<i>{text}</i>")
 
                 await callback.message.answer(
                     "\n".join(prompts_parts),
