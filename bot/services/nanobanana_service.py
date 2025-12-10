@@ -35,7 +35,8 @@ class NanoBananaService:
             "model": self.model,
             "messages": messages,
             "temperature": temperature,
-            "max_tokens": max_tokens
+            "max_tokens": max_tokens,
+            "modalities": ["image", "text"]  # Required for image generation
         }
 
         try:
@@ -116,14 +117,30 @@ class NanoBananaService:
     def _extract_image_from_response(self, response: dict) -> Optional[bytes]:
         """Extract base64 image from API response"""
         try:
-            content = response["choices"][0]["message"].get("content", "")
+            message = response.get("choices", [{}])[0].get("message", {})
+
+            # OpenRouter format - images array
+            if "images" in message:
+                for img in message["images"]:
+                    if isinstance(img, str) and img.startswith("data:image"):
+                        base64_data = img.split(",")[1]
+                        return base64.b64decode(base64_data)
+
+            content = message.get("content", "")
 
             # Handle list content (multimodal response)
             if isinstance(content, list):
                 for item in content:
                     if isinstance(item, dict):
+                        # Check for image_url type
                         if item.get("type") == "image_url":
                             url = item.get("image_url", {}).get("url", "")
+                            if url.startswith("data:image"):
+                                base64_data = url.split(",")[1]
+                                return base64.b64decode(base64_data)
+                        # Check for image type (alternative format)
+                        if item.get("type") == "image":
+                            url = item.get("source", {}).get("url", "") or item.get("url", "")
                             if url.startswith("data:image"):
                                 base64_data = url.split(",")[1]
                                 return base64.b64decode(base64_data)
@@ -134,6 +151,8 @@ class NanoBananaService:
                 match = re.search(r'data:image/[^;]+;base64,([A-Za-z0-9+/=]+)', content)
                 if match:
                     return base64.b64decode(match.group(1))
+
+            logger.warning(f"No image found in response. Keys: {message.keys()}")
 
         except Exception as e:
             logger.error(f"Error extracting image: {e}")
