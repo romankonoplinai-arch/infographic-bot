@@ -19,6 +19,7 @@ class FirstSlideStates(StatesGroup):
     waiting_for_reference = State()
     waiting_for_prompt = State()
     processing = State()
+    viewing_result = State()
 
 
 def get_reference_keyboard():
@@ -39,6 +40,22 @@ def get_reference_keyboard():
     return builder.as_markup()
 
 
+def get_result_keyboard():
+    """Keyboard after generation - regenerate or finish"""
+    from aiogram.types import InlineKeyboardButton
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="🔄 Другой вариант", callback_data="first_regenerate")
+    )
+    builder.row(
+        InlineKeyboardButton(text="✅ Готово", callback_data="first_done"),
+        InlineKeyboardButton(text="🏠 Меню", callback_data="back_to_menu")
+    )
+    return builder.as_markup()
+
+
 @router.callback_query(F.data == "first_slide")
 async def start_first_slide(callback: CallbackQuery, state: FSMContext):
     """Start first slide generation"""
@@ -47,7 +64,7 @@ async def start_first_slide(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         "<b>🎨 Создание первого слайда инфографики</b>\n\n"
         "Первый слайд - самый важный для CTR!\n"
-        "Вы получите 3 варианта в разных стилях.\n\n"
+        "Модель сама выберет лучший стиль для вашего товара.\n\n"
         "📸 <b>Шаг 1:</b> Отправьте фото товара:",
         reply_markup=get_cancel_keyboard()
     )
@@ -155,7 +172,7 @@ async def receive_reference(message: Message, state: FSMContext, bot: Bot):
 
 @router.message(FirstSlideStates.waiting_for_prompt, F.text)
 async def receive_prompt_and_generate(message: Message, state: FSMContext, bot: Bot):
-    """Generate 3 variants of first slide"""
+    """Save prompt and generate first slide"""
     prompt = message.text.strip()
 
     if len(prompt) < 10:
@@ -165,9 +182,8 @@ async def receive_prompt_and_generate(message: Message, state: FSMContext, bot: 
         )
         return
 
-    await state.set_state(FirstSlideStates.processing)
-
     session = session_manager.get_session(message.from_user.id)
+    session.slide_prompt = prompt  # Save for regeneration
 
     if not session.original_image:
         await message.answer(
@@ -177,65 +193,87 @@ async def receive_prompt_and_generate(message: Message, state: FSMContext, bot: 
         await state.clear()
         return
 
+    await generate_and_show_slide(message, state, session)
+
+
+async def generate_and_show_slide(message: Message, state: FSMContext, session):
+    """Generate single slide and show with result keyboard"""
+    await state.set_state(FirstSlideStates.processing)
+
     processing_msg = await message.answer(
-        "🎨 <b>Генерирую 3 варианта первого слайда...</b>\n\n"
-        "Это может занять 2-3 минуты.\n"
-        "Каждый вариант в уникальном стиле для максимального CTR."
+        "🎨 <b>Генерирую первый слайд...</b>\n\n"
+        "Модель выбирает лучший стиль для вашего товара.\n"
+        "Это может занять до минуты."
     )
 
     try:
-        # Generate 3 variants
-        variants = await nanobanana_service.generate_first_slide_variants(
+        image_bytes = await nanobanana_service.generate_first_slide(
             product_image_bytes=session.original_image,
             reference_image_bytes=session.reference_image,
-            prompt=prompt,
-            num_variants=3
+            prompt=session.slide_prompt
         )
 
         await processing_msg.delete()
 
-        if variants:
-            success_count = sum(1 for v in variants if v.get("image_bytes"))
+        if image_bytes:
+            processed = resize_for_telegram(image_bytes)
+            processed = compress_image(processed, max_size_mb=5)
 
-            await message.answer(
-                f"<b>✅ Готово!</b>\n\n"
-                f"Создано {success_count} из 3 вариантов.\n"
-                f"Выберите лучший для генерации остальных слайдов."
-            )
+            await state.set_state(FirstSlideStates.viewing_result)
 
-            for i, variant in enumerate(variants, 1):
-                style = variant.get("style", f"Стиль {i}")
-
-                if variant.get("image_bytes"):
-                    processed = resize_for_telegram(variant["image_bytes"])
-                    processed = compress_image(processed, max_size_mb=5)
-
-                    await message.answer_photo(
-                        photo=BufferedInputFile(processed, filename=f"variant_{i}.jpg"),
-                        caption=f"<b>Вариант {i}:</b> {style}"
-                    )
-                else:
-                    await message.answer(f"❌ Вариант {i} не удалось сгенерировать")
-
-            await message.answer(
-                "💡 <b>Совет:</b> Сохраните лучший вариант и используйте его "
-                "как референс в «Создать слайды по референсу».",
-                reply_markup=get_back_to_menu_keyboard()
+            await message.answer_photo(
+                photo=BufferedInputFile(processed, filename="first_slide.jpg"),
+                caption=(
+                    "<b>✅ Первый слайд готов!</b>\n\n"
+                    "Не нравится? Нажмите «Другой вариант» - модель создаст новый дизайн.\n"
+                    "Сохраните лучший и используйте как референс для остальных слайдов."
+                ),
+                reply_markup=get_result_keyboard()
             )
         else:
             await message.answer(
-                "❌ Не удалось сгенерировать варианты.\nПопробуйте другой промт.",
-                reply_markup=get_back_to_menu_keyboard()
+                "❌ Не удалось сгенерировать слайд.\nПопробуйте ещё раз.",
+                reply_markup=get_result_keyboard()
             )
+            await state.set_state(FirstSlideStates.viewing_result)
 
     except Exception as e:
         logger.error(f"Error generating first slide: {e}")
         await processing_msg.edit_text(
-            "❌ Ошибка при генерации.\nПопробуйте позже.",
+            "❌ Ошибка при генерации.\nПопробуйте ещё раз.",
+            reply_markup=get_result_keyboard()
+        )
+        await state.set_state(FirstSlideStates.viewing_result)
+
+
+@router.callback_query(F.data == "first_regenerate")
+async def regenerate_slide(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    """Regenerate slide with new style"""
+    session = session_manager.get_session(callback.from_user.id)
+
+    if not session.original_image or not session.slide_prompt:
+        await callback.message.answer(
+            "❌ Данные сессии потеряны. Начните заново.",
             reply_markup=get_back_to_menu_keyboard()
         )
+        await state.clear()
+        await callback.answer()
+        return
 
+    await callback.answer("Генерирую новый вариант...")
+    await generate_and_show_slide(callback.message, state, session)
+
+
+@router.callback_query(F.data == "first_done")
+async def finish_generation(callback: CallbackQuery, state: FSMContext):
+    """Finish generation process"""
+    await callback.message.answer(
+        "💡 <b>Совет:</b> Сохраните лучший вариант и используйте его "
+        "как референс в «Слайды по референсу» для создания остальных слайдов.",
+        reply_markup=get_back_to_menu_keyboard()
+    )
     await state.clear()
+    await callback.answer()
 
 
 @router.message(FirstSlideStates.waiting_for_product_photo)

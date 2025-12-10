@@ -409,91 +409,73 @@ class NanoBananaService:
 
         return None
 
-    async def generate_first_slide_variants(
+    async def generate_first_slide(
         self,
         product_image_bytes: bytes,
         reference_image_bytes: Optional[bytes],
-        prompt: str,
-        num_variants: int = 3
-    ) -> list[dict]:
+        prompt: str
+    ) -> Optional[bytes]:
         """
-        Generate multiple variants of the first slide with different styles.
-        Returns list of dicts with style, image_bytes.
+        Generate first slide with creative freedom - model chooses best style.
+        Returns image bytes or None.
         """
         product_base64 = image_to_base64(product_image_bytes)
 
-        styles = [
-            ("Минималистичный премиум", "minimalist premium white background, clean elegant design"),
-            ("Яркий продающий", "vibrant eye-catching colors, bold CTR-optimized design, attention grabbing"),
-            ("Современный технологичный", "modern tech-inspired, gradient background, professional infographic")
-        ]
+        logger.info("Generating first slide with creative freedom")
 
-        results = []
+        base_prompt = f"""Создай ПЕРВЫЙ СЛАЙД инфографики для WB/Ozon с МАКСИМАЛЬНЫМ CTR.
 
-        for i, (style_name, style_hint) in enumerate(styles[:num_variants], 1):
-            logger.info(f"Generating first slide variant {i}: {style_name}")
-
-            base_prompt = f"""Создай ПЕРВЫЙ СЛАЙД инфографики для маркетплейса с МАКСИМАЛЬНЫМ CTR.
-
-ОПИСАНИЕ ОТ ЗАКАЗЧИКА:
+ПОЖЕЛАНИЯ ЗАКАЗЧИКА:
 {prompt}
 
-СТИЛЬ ЭТОГО ВАРИАНТА: {style_name}
-Характеристики: {style_hint}
+ТВОЯ ЗАДАЧА:
+1. Проанализируй товар на фото
+2. Выбери ЛУЧШИЙ стиль дизайна который идеально подойдёт ЭТОМУ товару
+3. Создай слайд который МАКСИМАЛЬНО привлечёт внимание покупателей
 
-КРИТИЧЕСКИЕ ТРЕБОВАНИЯ:
-1. Размер 900x1200 пикселей (3:4)
-2. Товар с фото - ГЛАВНЫЙ ЭЛЕМЕНТ
-3. Все тексты ТОЛЬКО НА РУССКОМ
-4. Дизайн должен ПРИВЛЕКАТЬ ВНИМАНИЕ и ПОВЫШАТЬ CTR
-5. Профессиональное качество для маркетплейса
-6. Яркие акценты, чёткая композиция
-7. Если указана цена - сделай её заметной
+ТРЕБОВАНИЯ:
+- Размер 900x1200 пикселей (3:4)
+- Все тексты ТОЛЬКО НА РУССКОМ языке
+- Ты СВОБОДЕН в выборе стиля - выбери то, что лучше ПРОДАСТ этот товар
+- Высочайший CTR - покупатель ДОЛЖЕН кликнуть
+- Если указана цена - сделай её заметной
+- Товар - главный элемент композиции
 
-ВАЖНО: Не ограничивай креатив! Сделай максимально продающий и привлекательный слайд.
+НЕ ОГРАНИЧИВАЙ СЕБЯ! Ты профессиональный дизайнер инфографики для маркетплейсов.
+Придумай такой дизайн, который заставит покупателя остановиться и кликнуть.
 
-Сгенерируй готовое изображение инфографики."""
+ДЕРЗАЙ! Покажи на что способен."""
 
-            content = [
-                {"type": "text", "text": base_prompt},
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/jpeg;base64,{product_base64}"}
-                }
-            ]
+        content = [
+            {"type": "text", "text": base_prompt},
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{product_base64}"}
+            }
+        ]
 
-            # Add reference if provided
-            if reference_image_bytes:
-                ref_base64 = image_to_base64(reference_image_bytes)
-                content.append({"type": "text", "text": "\n\nРЕФЕРЕНС СТИЛЯ (возьми идеи из этого дизайна):"})
-                content.append({
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/jpeg;base64,{ref_base64}"}
-                })
+        # Add reference if provided
+        if reference_image_bytes:
+            ref_base64 = image_to_base64(reference_image_bytes)
+            content.append({"type": "text", "text": "\n\nРЕФЕРЕНС (возьми идеи из этого дизайна, но добавь свой креатив):"})
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{ref_base64}"}
+            })
 
-            messages = [{"role": "user", "content": content}]
+        messages = [{"role": "user", "content": content}]
 
-            response = await self._make_request(messages, temperature=0.9)
+        response = await self._make_request(messages, temperature=0.95)
 
-            if response:
-                image_bytes = self._extract_image_from_response(response)
-                results.append({
-                    "variant": i,
-                    "style": style_name,
-                    "image_bytes": image_bytes
-                })
-                if image_bytes:
-                    logger.info(f"Variant {i} generated successfully")
-                else:
-                    logger.warning(f"Variant {i}: no image in response")
+        if response:
+            image_bytes = self._extract_image_from_response(response)
+            if image_bytes:
+                logger.info("First slide generated successfully")
+                return image_bytes
             else:
-                results.append({
-                    "variant": i,
-                    "style": style_name,
-                    "image_bytes": None
-                })
+                logger.warning("First slide: no image in response")
 
-        return results
+        return None
 
     async def generate_slide_from_reference(
         self,

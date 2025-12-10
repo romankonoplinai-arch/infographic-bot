@@ -16,6 +16,11 @@ class UserSession:
     # Images
     original_image: Optional[bytes] = None
     no_bg_image: Optional[bytes] = None
+    reference_image: Optional[bytes] = None
+
+    # First slide generation
+    slide_prompt: Optional[str] = None
+    product_description: Optional[str] = None
 
     # SEO data
     keywords: Optional[dict] = None
@@ -41,6 +46,9 @@ class UserSession:
         self.category = None
         self.original_image = None
         self.no_bg_image = None
+        self.reference_image = None
+        self.slide_prompt = None
+        self.product_description = None
         self.keywords = None
         self.seo_title = None
         self.seo_card_content = None
