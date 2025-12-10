@@ -119,11 +119,20 @@ class NanoBananaService:
         try:
             message = response.get("choices", [{}])[0].get("message", {})
 
-            # OpenRouter format - images array
+            # OpenRouter format: images[].image_url.url
             if "images" in message:
                 for img in message["images"]:
-                    if isinstance(img, str) and img.startswith("data:image"):
+                    if isinstance(img, dict):
+                        # Format: {"type": "image_url", "image_url": {"url": "data:image/..."}}
+                        url = img.get("image_url", {}).get("url", "")
+                        if url and url.startswith("data:image"):
+                            base64_data = url.split(",")[1]
+                            logger.info(f"Extracted image from images[].image_url.url")
+                            return base64.b64decode(base64_data)
+                    elif isinstance(img, str) and img.startswith("data:image"):
+                        # Fallback: direct string in images array
                         base64_data = img.split(",")[1]
+                        logger.info(f"Extracted image from images[] string")
                         return base64.b64decode(base64_data)
 
             content = message.get("content", "")
@@ -135,14 +144,9 @@ class NanoBananaService:
                         # Check for image_url type
                         if item.get("type") == "image_url":
                             url = item.get("image_url", {}).get("url", "")
-                            if url.startswith("data:image"):
+                            if url and url.startswith("data:image"):
                                 base64_data = url.split(",")[1]
-                                return base64.b64decode(base64_data)
-                        # Check for image type (alternative format)
-                        if item.get("type") == "image":
-                            url = item.get("source", {}).get("url", "") or item.get("url", "")
-                            if url.startswith("data:image"):
-                                base64_data = url.split(",")[1]
+                                logger.info(f"Extracted image from content[].image_url")
                                 return base64.b64decode(base64_data)
 
             # Handle string content with embedded base64
@@ -150,9 +154,11 @@ class NanoBananaService:
                 import re
                 match = re.search(r'data:image/[^;]+;base64,([A-Za-z0-9+/=]+)', content)
                 if match:
+                    logger.info(f"Extracted image from content string")
                     return base64.b64decode(match.group(1))
 
-            logger.warning(f"No image found in response. Keys: {message.keys()}")
+            # Log response structure for debugging
+            logger.warning(f"No image found. Message keys: {list(message.keys())}, images: {message.get('images', 'N/A')}")
 
         except Exception as e:
             logger.error(f"Error extracting image: {e}")
